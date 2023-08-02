@@ -1,0 +1,51 @@
+# Функция генерации данных
+def generate_ab_data(num_rows: int, num_variants: int, variant_list: List[str], conversion_probs: List[float]) -> pd.DataFrame:
+    np.random.seed(123)
+
+    user_ids = np.arange(1, num_rows+1)
+    variants = np.random.choice(variant_list, size=num_rows)
+    conversions = np.random.binomial(1, conversion_probs[variants])
+
+    df = pd.DataFrame({
+        'user_id': user_ids,
+        'variant': variants,
+        'conversion': conversions
+    })
+
+    return df
+
+
+# 1. Задаем количество вариантов 
+num_variants: int = 3
+
+# 2. Генерируем данные
+num_rows: int = 5000
+variant_list = ['A', 'B', 'C']
+conversion_probs = [0.1, 0.15, 0.2]
+df: pd.DataFrame = generate_ab_data(num_rows, num_variants, variant_list, conversion_probs)
+
+# 3. Задаем одинаковые априорные распределения
+a_priors: List[int] = [1] * num_variants
+b_priors: List[int] = [1] * num_variants
+
+# 4. Обрабатываем события пользователей
+variants = df['variant']
+conversions = df['conversion']
+a_posterior = a_priors + conversions
+b_posterior = b_priors + 1 - conversions
+a_priors = a_posterior
+b_priors = b_posterior
+
+# 5. Пересчитываем апостериорные распределения
+posteriors: Dict[str, beta] = {variant: beta(a, b) for variant, a, b in zip(df['variant'].unique(), a_priors, b_priors)}
+
+# 6. Вычисляем ожидаемые потери
+losses: Dict[str, float] = {variant: 1 - dist.cdf(max([dist.mean() for dist in posteriors.values() if dist != posterior])) for variant, dist in posteriors.items()}
+losses_df: pd.DataFrame = pd.DataFrame(losses.items(), columns=['variant', 'loss'])
+print(losses_df)
+
+# 8. Визуализируем распределения
+x = np.linspace(0, 1, 200)
+[plt.plot(x, dist.pdf(x), label=variant) for variant, dist in posteriors.items()]
+plt.legend()
+plt.show()
